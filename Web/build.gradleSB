@@ -1,0 +1,341 @@
+plugins {
+	  id 'java'
+		id 'org.springframework.boot' version '3.2.0'
+		id 'io.spring.dependency-management' version '1.1.4'
+}
+
+java {
+  sourceCompatibility = '17'
+}
+
+jar {
+    enabled = false
+}
+
+bootJar {
+		duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+repositories {
+	mavenLocal()
+	mavenCentral()
+
+	maven {url 'https://pkgs.dev.azure.com/genexuslabs/3361ab3b-96bc-4a69-a37a-f2b255ff2f35/_packaging/snapshots/maven/v1'}
+	maven {
+		url 'https://repository.openmindonline.it'
+		metadataSources {
+			artifact()
+		}
+	}
+}
+
+configurations {
+	compileClasspath.extendsFrom(basicDeps)
+	compileClasspath.extendsFrom(genexusConfiguration) 
+	runtimeClasspath.extendsFrom(basicDeps)
+	runtimeClasspath.extendsFrom(genexusConfiguration)
+
+	all {
+		exclude group: 'commons-logging', module: 'commons-logging'
+	}
+}
+
+ext {
+	genexusVersion = project.findProperty('GENEXUS_VERSION')
+	javaPlatform = project.findProperty('JAVA_PLATFORM')	
+	pdfLibrary = project.findProperty('PDF_LIBRARY')
+}
+
+FileTree gradleFiles = fileTree('.').include('*.gradle')
+gradleFiles.exclude '.gradle'
+gradleFiles.exclude 'build.gradle'
+gradleFiles.visit {element ->
+    println "apply $element.relativePath"
+    apply from: "$element.relativePath"
+}
+
+dependencies {
+  implementation ('org.springframework.boot:spring-boot-starter-web'){
+  	exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+  }
+  
+  implementation 'org.springframework.boot:spring-boot-starter-log4j2'
+  
+  implementation 'org.springframework.boot:spring-boot-devtools'
+  
+  implementation ('org.springframework.boot:spring-boot-starter-websocket') {
+  	exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+  }
+  
+  implementation ("com.genexus:gxspringboot:${genexusVersion}") {
+  	exclude group: 'com.genexus', module: 'gxclassR'
+  }
+  
+	if (project.hasProperty('SQLSERVER')) {
+		implementation ("com.microsoft.sqlserver:mssql-jdbc:10.2.0.jre8")
+	}
+
+	if (project.hasProperty('ORACLE')) {
+		implementation ("com.oracle.database.jdbc:ojdbc6:11.2.0.4") {
+			transitive = false
+		}
+	}	
+
+	if (project.hasProperty('POSTGRESQL')) {
+		implementation ("org.postgresql:postgresql:42.2.14")
+	}
+
+	if (project.hasProperty('MYSQL')) {
+		if (project.findProperty('DBMS_MYSQL_VERSION').equals('8')) {
+			implementation ("mysql:mysql-connector-java:8.0.29") {
+				transitive = false
+			}
+		}
+		else {
+			implementation ("mysql:mysql-connector-java:5.1.49")
+		}
+	}
+
+	if (project.hasProperty('DB2ISERIES')) {
+		implementation ("net.sf.jt400:jt400:9.3")
+	}
+
+	if (project.hasProperty('DAMENG')) {
+		implementation ("com.dameng:DmJdbcDriver18:8.1.2.79")
+	}  
+  
+	basicDeps ("com.genexus:gxcommon:${genexusVersion}") {
+		if (project.hasProperty('UseFrontEnd') && !UseFrontEnd.equalsIgnoreCase("true")) {	
+			exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
+		}
+	}
+	
+		implementation ("com.genexus:gxweb:${genexusVersion}") {
+				exclude group: 'com.genexus', module: 'gxclassR'
+		}
+	
+	basicDeps ("com.genexus:gxclassR:${genexusVersion}") {
+		exclude group: 'com.genexus', module: 'gxcommon'
+		exclude group: 'com.genexus', module: 'gxwrapperjavax'
+		exclude group: 'com.genexus', module: 'gxmail'
+		exclude group: 'javax.transaction', module: 'jta'
+		exclude group: 'com.sun.org.apache.xml.internal', module: 'resolver'
+		exclude group: 'org.slf4j', module: 'slf4j-nop'
+		exclude group: 'org.slf4j', module: 'slf4j-api'
+		if (pdfLibrary.equals("ITEXT")) {
+			exclude group: 'com.itextpdf', module: '*'
+			exclude group: 'org.apache.pdfbox', module: 'pdfbox'
+			exclude group: 'com.google.zxing', module: 'core'
+			exclude group: 'org.jsoup', module: 'jsoup'
+		}
+		if (pdfLibrary.equals("ITEXT8")) {
+			exclude group: 'com.lowagie', module: '*'
+			exclude group: 'org.apache.pdfbox', module: 'pdfbox'
+			exclude group: 'com.google.zxing', module: 'core'
+			exclude group: 'org.jsoup', module: 'jsoup'
+		}
+		if (pdfLibrary.equals("PDFBOX")) {
+			exclude group: 'com.lowagie', module: '*'
+			exclude group: 'com.itextpdf', module: '*'
+		}		
+	}
+	
+	implementation ("com.genexus:gxoffice:${genexusVersion}") {
+		exclude group: 'com.genexus', module: 'gxclassR'
+		exclude group: 'org.apache.logging.log4j', module: 'log4j-api'
+	}
+
+	implementation ("com.genexus:gxmail:${genexusVersion}"){
+		exclude group: 'com.genexus', module: 'gxcommon'
+	}
+	
+	implementation ("com.genexus:gxgeospatial:${genexusVersion}") {
+		exclude group: 'com.genexus', module: 'gxclassR'
+	}
+	
+	implementation ("com.genexus:gxsearch:${genexusVersion}") {
+		exclude group: 'com.genexus', module: 'gxclassR'
+		exclude group: 'org.apache.logging.log4j', module: 'log4j-api'
+	}		
+	
+	implementation (group: 'io.grpc', name: 'grpc-all', version: '1.49.0') {
+		exclude group: 'io.grpc', module: 'grpc-netty-shaded'
+		exclude group: 'io.grpc', module: 'grpc-rls'
+		exclude group: 'io.grpc', module: 'grpc-testing'
+		exclude group: 'com.google.auth', module: 'google-auth-library-credentials'
+		exclude group: 'com.google.auth', module: 'google-auth-library-oauth2-http'
+		exclude group: 'org.codehaus.mojo', module: 'animal-sniffer-annotations'
+		exclude group: 'org.conscrypt', module: 'conscrypt-openjdk-uber'
+	}
+	
+	implementation fileTree("lib") {
+		include '*.jar'
+	}
+
+	implementation fileTree("drivers") {
+		include '*.jar'
+	}
+
+	implementation fileTree("modules") {
+		include '*.jar'
+	}
+
+	implementation fileTree("datasources") {
+		include '*.jar'
+	}
+
+	implementation fileTree("services") {
+		include '*.jar'
+	}
+	
+	implementation fileTree("GAMLibraries") {
+		include '*.jar'
+		exclude 'slf4j-simple-1.7.10.jar'
+		exclude 'slf4j-api-1.7.5.jar'
+	}
+	
+	implementation fileTree("GAM_Backend/WEB-INF/lib") {
+		include '*.jar'
+		exclude 'slf4j-simple-1.7.10.jar'
+		exclude 'slf4j-api-1.7.5.jar'
+	}	
+	
+	implementation fileTree(".") {
+		include 'QueryViewerServices*.jar'
+		include 'ExternalObjects.jar'
+	}	
+	
+	basicDeps ("com.genexus:gxwrappercommon:${genexusVersion}") {
+		exclude group: 'com.genexus', module: 'gxcommon'		
+	}
+	
+	basicDeps ("com.genexus:gxwrapperjakarta:${genexusVersion}") {
+		exclude group: 'com.genexus', module: 'gxwrappercommon'
+		exclude group: 'joda-time', module: 'joda-time'
+		exclude group: 'jakarta.servlet', module: 'jakarta.servlet-api'
+	}			
+}
+
+task copyGAMConfigurationFiles(type: Copy) {
+	from ('.') {
+		include 'application.gam'
+		include 'connection.gam'
+	}
+	
+	into 'src\\main\\resources'
+	
+	eachFile {
+    def targetFile = new File(destinationDir, path)
+    if (file.lastModified() < targetFile.lastModified()) {
+        exclude()
+    }
+	}	
+}	
+
+task copyRootResources(type: Copy) {
+	into 'src\\main\\resources'
+	
+	from ('.') {
+		include 'CloudServices.config'
+		include 'GXCF_Chatbots.config'
+		include 'rewrite.config'
+		include '*.services'
+		include 'PDFReport.template'
+		include 'gxusercontrols/**/*'
+		include 'private/**/*'
+		include 'gxmetadata/**/*'
+		include 'Metadata/TableAccess/**/*'		
+		include 'themes/**/*' 
+	}
+	
+	from ('GAM_Backend') {
+		include 'themes/**/*' 
+	}
+	
+	from ('GAM_Backend/WEB-INF') {
+		include 'private/**/*'
+		include 'gxusercontrols/**/*'
+	}		
+	
+	eachFile {
+    def targetFile = new File(destinationDir, path)
+    if (file.lastModified() < targetFile.lastModified()) {
+        exclude()
+    }
+	}
+}
+
+task copyStatic(type: Copy) {
+	from ('.') {
+		include 'bootstrap/**/*'
+		include 'static/**/*'
+		include 'devmenu/**/*'
+		include '*Resources/**/*'
+		include 'UserControls/**/*'
+		include 'Help/**/*.htm'
+		include	'*manifest.json'
+		include '*service-worker.js'
+		include '*.yaml'
+		include 'developermenu.html'
+		include 'DeveloperMenu.xml'
+		include 'prgs.xsl'
+	}
+	from ('../../CSSLibraries') {
+		include '**/*'
+	}
+	from ('staticContent') {
+		exclude '**/*.html'
+	}	
+	from ('js') {
+		include '**/*.js'
+		exclude '**/*.src.js'
+	}		
+	from ('UCSupportFiles') {
+		include '**/*.*'
+		exclude '*.VER'
+	}
+	from ('GAM_Backend/static') {
+		include '**/*'
+	}	
+	into 'src\\main\\resources\\static'
+	
+	eachFile {
+    def targetFile = new File(destinationDir, path)
+    if (file.lastModified() < targetFile.lastModified()) {
+        exclude()
+    }
+	}	
+}
+
+task copyAdditionalFiles(type: Copy) {
+	dependsOn tasks.copyRootResources
+	dependsOn tasks.copyStatic
+	dependsOn tasks.copyGAMConfigurationFiles
+	from('.') {
+		include 'log4j2.xml'
+		include 'qviewer/**/*'
+	}
+	from('src\\main\\java') {
+		include '**\\*.cfg'
+		include '**\\Images.txt'
+		include '**\\messages*.txt'
+	}
+	from('GAM_Backend/WEB-INF/classes') {
+		include '**/*'
+	}	
+	into project.sourceSets.main.java.destinationDirectory
+	
+	eachFile {
+    def targetFile = new File(destinationDir, path)
+    if (file.lastModified() < targetFile.lastModified()) {
+        exclude()
+    }
+	}	
+}
+
+task cleanSources(type: Delete) {
+	delete 'src\\main\\java'
+}
+
+processResources.dependsOn copyAdditionalFiles
+clean.finalizedBy cleanSources

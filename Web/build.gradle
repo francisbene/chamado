@@ -1,0 +1,673 @@
+apply plugin: 'java'
+project.gradle.startParameter.excludedTaskNames.add("jar")
+project.gradle.startParameter.excludedTaskNames.add("test")
+
+repositories {
+	mavenLocal()
+	mavenCentral()
+
+	maven {url 'https://pkgs.dev.azure.com/genexuslabs/3361ab3b-96bc-4a69-a37a-f2b255ff2f35/_packaging/snapshots/maven/v1'}
+	maven {
+		url 'https://repository.openmindonline.it'
+		metadataSources {
+			artifact()
+		}
+	}
+}
+
+if (project.hasProperty('UseCompileSources')) {
+	sourceSets {
+	  main {
+	    java.destinationDirectory.set(file('tempClasses'))
+	  }
+	}
+}
+
+compileJava {
+	if (project.hasProperty('COMPILER_OPTIONS')) {
+		options.compilerArgs = Eval.me(project.findProperty('COMPILER_OPTIONS'))
+	}
+	options.encoding = "utf8"
+	options.fork = true
+	options.forkOptions.memoryMaximumSize = project.findProperty('memoryMaximumSize')
+	
+	
+	if (project.hasProperty('UseCompileSources') && project.hasProperty('MainCompileSources')) {
+		def list = new File("CompileSources.txt").text.readLines()
+		for(item in list){
+			include item
+		}
+	}	
+}
+
+configurations {
+	reorgConfiguration
+	driversConfiguration
+	compileClasspath.extendsFrom(genexusConfiguration)
+	javaxJaxws
+	jakartaJaxws
+	jakartaJaxbGXTest
+}
+
+ext {
+	genexusVersion = project.findProperty('GENEXUS_VERSION')
+	javaPlatform = project.findProperty('JAVA_PLATFORM')
+	servletVersion = project.findProperty('SERVLET_VERSION')
+	pdfLibrary = project.findProperty('PDF_LIBRARY')
+	jerseyJakartaversion = '3.1.1'
+}
+
+if (!project.hasProperty('deploy')) {
+	FileTree gradleFiles = fileTree('.').include('*.gradle')
+	gradleFiles.exclude '.gradle'
+	gradleFiles.exclude 'build.gradle'
+	gradleFiles.visit {element ->
+	    println "apply $element.relativePath"
+	    apply from: "$element.relativePath"
+	}
+}
+
+if (project.hasProperty('deploy') && project.hasProperty('gradleFiles')) {
+	String[] str;
+	str = project.findProperty('gradleFiles').split(';');
+	for( String values : str ) {
+			println "apply " + values;
+      apply from: values;
+	}
+}
+
+dependencies {
+	if (project.hasProperty('SQLSERVER')) {
+		driversConfiguration ("com.microsoft.sqlserver:mssql-jdbc:10.2.0.jre8")
+	}
+
+	if (project.hasProperty('ORACLE')) {
+		driversConfiguration ("com.oracle.database.jdbc:ojdbc6:11.2.0.4") {
+			transitive = false
+		}
+	}	
+
+	if (project.hasProperty('POSTGRESQL')) {
+		driversConfiguration ("org.postgresql:postgresql:42.2.14")
+	}
+
+	if (project.hasProperty('MYSQL')) {
+		if (project.findProperty('DBMS_MYSQL_VERSION').equals('8')) {
+			driversConfiguration ("mysql:mysql-connector-java:8.0.29") {
+				transitive = false
+			}
+		}
+		else {
+			driversConfiguration ("mysql:mysql-connector-java:5.1.49")
+		}
+	}
+
+	if (project.hasProperty('DB2ISERIES')) {
+		driversConfiguration ("net.sf.jt400:jt400:9.3")
+	}
+
+	if (project.hasProperty('DAMENG')) {
+		driversConfiguration ("com.dameng:DmJdbcDriver18:8.1.2.79")
+	}	
+	
+	reorgConfiguration ("com.genexus:gxclassR:${genexusVersion}") {
+		exclude group: 'com.genexus', module: 'gxcryptocommon'
+		exclude group: 'com.genexus', module: 'gxmail'
+		exclude group: 'jakarta.ws.rs', module: 'jakarta.ws.rs-api'
+		exclude group: 'javax.transaction', module: 'jta'
+		exclude group: 'com.sun.org.apache.xml.internal', module: 'resolver'
+		exclude group: 'org.apache.logging.log4j', module: 'log4j-1.2-api'
+		exclude group: 'com.lowagie', module: '*'
+		exclude group: 'com.itextpdf', module: '*'
+		exclude group: 'org.apache.pdfbox', module: 'pdfbox'
+		exclude group: 'com.google.zxing', module: 'core'		
+		exclude group: 'org.jsoup', module: 'jsoup'
+		if (project.hasProperty('deploy')) {
+			exclude group: 'com.genexus', module: 'gxcommon'
+			exclude group: 'com.genexus', module: 'gxwrapperjavax'
+			exclude group: 'org.glassfish.main.javaee-api', module: 'javax.jms'
+			exclude group: 'com.github.spullara.mustache.java', module: 'compiler'
+			exclude group: 'commons-net', module: 'commons-net'
+			exclude group: 'com.fasterxml.jackson.core', module: 'jackson-core'
+			exclude group: 'com.fasterxml.jackson.core', module: 'jackson-annotations'
+			exclude group: 'com.fasterxml.jackson.core', module: 'jackson-databind'
+			exclude group: 'org.owasp.encoder', module: 'encoder'
+			exclude group: 'org.apache.httpcomponents', module: 'httpclient'
+		}
+	}
+
+	if (project.hasProperty('deploy')) {
+		reorgConfiguration ("com.genexus:gxwrappercommon:${genexusVersion}") {
+			exclude group: 'com.genexus', module: 'gxcommon'
+			exclude group: 'com.fasterxml.jackson.core', module: 'jackson-core'
+			exclude group: 'org.apache.ws.security', module: 'wss4j'
+		}
+
+		reorgConfiguration ("com.genexus:gxcommon:${genexusVersion}") {
+			exclude group: 'xerces', module: 'xercesImpl'
+			exclude group: 'commons-codec', module: 'commons-codec'
+			exclude group: 'commons-lang', module: 'commons-lang'
+			exclude group: 'org.apache.httpcomponents', module: 'httpclient'
+		}		
+	}
+
+	genexusConfiguration ("com.genexus:gxcommon:${genexusVersion}") {
+		if (project.hasProperty('deploy') && project.hasProperty('UseFrontEnd') && !UseFrontEnd.equalsIgnoreCase("true")) {	
+			exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
+		}
+	}
+	
+	if (!project.hasProperty('deploy') || (project.hasProperty('UseFrontEnd') && UseFrontEnd.equalsIgnoreCase("true"))) {	
+		genexusConfiguration ("com.genexus:gxweb:${genexusVersion}") {
+				exclude group: 'com.genexus', module: 'gxclassR'
+		}
+	}
+
+	genexusConfiguration ("com.genexus:gxclassR:${genexusVersion}") {
+		exclude group: 'com.genexus', module: 'gxcommon'
+		exclude group: 'com.genexus', module: 'gxwrapperjavax'
+		exclude group: 'com.genexus', module: 'gxmail'
+		exclude group: 'jakarta.ws.rs', module: 'jakarta.ws.rs-api'
+		exclude group: 'javax.transaction', module: 'jta'
+		if (pdfLibrary.equals("ITEXT") || (project.hasProperty('deploy') && project.hasProperty('PDFSupport') && PDFSupport.equalsIgnoreCase("False") )) {
+			exclude group: 'com.itextpdf', module: '*'
+			exclude group: 'org.apache.pdfbox', module: 'pdfbox'
+			exclude group: 'com.google.zxing', module: 'core'
+			exclude group: 'org.jsoup', module: 'jsoup'
+		}
+		if (pdfLibrary.equals("ITEXT8") || (project.hasProperty('deploy') && project.hasProperty('PDFSupport') && PDFSupport.equalsIgnoreCase("False") )) {
+			exclude group: 'com.lowagie', module: '*'
+			exclude group: 'org.apache.pdfbox', module: 'pdfbox'
+			exclude group: 'com.google.zxing', module: 'core'
+			exclude group: 'org.jsoup', module: 'jsoup'
+		}
+		if (pdfLibrary.equals("PDFBOX") || (project.hasProperty('deploy') && project.hasProperty('PDFSupport') && PDFSupport.equalsIgnoreCase("False") )) {
+			exclude group: 'com.lowagie', module: '*'
+			exclude group: 'com.itextpdf', module: '*'
+		}		
+		if (project.hasProperty('deploy') && project.hasProperty('RestSupport') && !RestSupport.equalsIgnoreCase("true") ) {
+			exclude group: 'jakarta.ws.rs', module: 'jakarta.ws.rs-api'
+		}
+		if (project.hasProperty('deploy') && project.hasProperty('SoapNativeSupport') && !SoapNativeSupport.equalsIgnoreCase("true") ) {
+			exclude group: 'com.sun.org.apache.xml.internal', module: 'resolver'
+		}		
+	}
+
+	if (!project.hasProperty('deploy') || (project.hasProperty('GXDynCallSupport') && GXDynCallSupport.equalsIgnoreCase("True") )) {
+		genexusConfiguration ("com.genexus:gxdynamiccall:${genexusVersion}") {
+			exclude group: 'com.genexus', module: 'gxclassR'
+		}
+	}
+
+	if (!project.hasProperty('deploy') || (project.hasProperty('GeographySupport') && GeographySupport.equalsIgnoreCase("True") )) {
+		genexusConfiguration ("com.genexus:gxgeospatial:${genexusVersion}") {
+			exclude group: 'com.genexus', module: 'gxclassR'
+		}
+	}
+
+	if (!project.hasProperty('deploy') || (project.hasProperty('MapsSupport') && MapsSupport.equalsIgnoreCase("True") )) {
+		genexusConfiguration ("com.genexus:gxmaps:${genexusVersion}") {
+			exclude group: 'com.genexus', module: 'gxclassR'
+		}
+	}
+
+	if (!project.hasProperty('deploy') || (project.hasProperty('SearchableSupport') && SearchableSupport.equalsIgnoreCase("True") )) {
+		genexusConfiguration ("com.genexus:gxsearch:${genexusVersion}") {
+			exclude group: 'com.genexus', module: 'gxclassR'
+			exclude group: 'org.apache.logging.log4j', module: 'log4j-api'
+		}
+	}
+
+	if (!project.hasProperty('deploy') || (project.hasProperty('OfficeSupport') && OfficeSupport.equalsIgnoreCase("True") )) {
+		genexusConfiguration ("com.genexus:gxoffice:${genexusVersion}") {
+			exclude group: 'com.genexus', module: 'gxclassR'
+			exclude group: 'org.apache.logging.log4j', module: 'log4j-api'
+		}
+	}
+
+	if (!project.hasProperty('deploy') || (project.hasProperty('MailSupport') && MailSupport.equalsIgnoreCase("True") )) {
+		genexusConfiguration ("com.genexus:gxmail:${genexusVersion}"){
+			exclude group: 'com.genexus', module: 'gxcommon'
+		}
+	}	
+
+	if (!project.hasProperty('deploy') || (project.hasProperty('GRPCSupport') && GRPCSupport.equalsIgnoreCase("True") )) {
+		genexusConfiguration (group: 'io.grpc', name: 'grpc-all', version: '1.49.0') {
+			exclude group: 'io.grpc', module: 'grpc-netty-shaded'
+			exclude group: 'io.grpc', module: 'grpc-rls'
+			exclude group: 'io.grpc', module: 'grpc-testing'
+			exclude group: 'com.google.auth', module: 'google-auth-library-credentials'
+			exclude group: 'com.google.auth', module: 'google-auth-library-oauth2-http'
+			exclude group: 'org.codehaus.mojo', module: 'animal-sniffer-annotations'
+			exclude group: 'org.conscrypt', module: 'conscrypt-openjdk-uber'
+		}
+	}
+
+	if (!project.hasProperty('deploy')) {
+		genexusConfiguration fileTree("lib") {
+			include '*.jar'
+		}
+	}
+
+	if (!project.hasProperty('deploy')) {
+		genexusConfiguration fileTree("drivers") {
+			include '*.jar'
+		}
+	}
+
+	if (!project.hasProperty('deploy')) {
+		genexusConfiguration fileTree("modules") {
+			include '*.jar'
+		}
+	}
+
+	if (!project.hasProperty('deploy')) {
+		genexusConfiguration fileTree("datasources") {
+			include '*.jar'
+		}
+	}
+
+	if (!project.hasProperty('deploy')) {
+		genexusConfiguration fileTree("services") {
+			include '*.jar'
+		}
+	}
+
+	if (!project.hasProperty('deploy')) {
+		genexusConfiguration fileTree("GAMLibraries") {
+			include '*.jar'
+		}
+	}
+
+	genexusConfiguration ("com.genexus:gxwrappercommon:${genexusVersion}") {
+		exclude group: 'com.genexus', module: 'gxcommon'
+		if (project.hasProperty('deploy') && project.hasProperty('SoapNativeSupport') && !SoapNativeSupport.equalsIgnoreCase("true") ) {
+			exclude group: 'org.apache.ws.security', module: 'wss4j'
+		}		
+	}
+
+	if (javaPlatform == "jakartaEE" || javaPlatform == "both") {
+		genexusConfiguration ("com.genexus:gxwrapperjakarta:${genexusVersion}") {
+			exclude group: 'com.genexus', module: 'gxwrappercommon'
+			exclude group: 'joda-time', module: 'joda-time'
+			exclude group: 'org.springframework', module: 'spring-beans'
+			if (servletVersion == '6' || (project.hasProperty('deploy') && project.hasProperty('RestSupport') && !RestSupport.equalsIgnoreCase("true"))) {
+				exclude group: 'org.glassfish.jersey.media', module: 'jersey-media-json-jackson'
+				exclude group: 'org.glassfish.jersey.containers', module: 'jersey-container-servlet-core'
+				exclude group: 'org.glassfish.jersey.inject', module: 'jersey-hk2'
+			}
+			if (project.hasProperty('deploy') && project.hasProperty('RestSupport') && !RestSupport.equalsIgnoreCase("true") ) {
+				exclude group: 'com.fasterxml.jackson.jakarta.rs', module: 'jackson-jakarta-rs-json-provider'
+				exclude group: 'com.fasterxml.jackson.jakarta.rs', module: 'jackson-jakarta-rs-base'
+				exclude group: 'com.fasterxml.jackson.module', module: 'jackson-module-jakarta-xmlbind-annotations'
+			}
+			if (project.hasProperty('deploy') && project.hasProperty('SoapNativeSupport') && !SoapNativeSupport.equalsIgnoreCase("true") ) {
+				exclude group: 'com.sun.xml.ws', module: 'jaxws-rt'
+			}
+			if (project.hasProperty('deploy') && project.hasProperty('RestSupport') && !RestSupport.equalsIgnoreCase("true") && project.hasProperty('SoapNativeSupport') && !SoapNativeSupport.equalsIgnoreCase("true")) {
+				exclude group: 'jakarta.xml.ws', module: 'jakarta.xml.ws-api'
+			}
+			if (project.hasProperty('deploy')) {
+				exclude group: 'jakarta.servlet', module: 'jakarta.servlet-api'
+			}
+		}
+
+		if (!project.hasProperty('deploy')) {
+			genexusConfiguration fileTree('services\\JakartaEE') {
+				include '*.jar'
+			}
+		}
+
+		if (servletVersion == '6') {
+			if (!project.hasProperty('deploy') || (project.hasProperty('RestSupport') && RestSupport.equalsIgnoreCase("true")) ) {
+				genexusConfiguration ("org.glassfish.jersey.media:jersey-media-json-jackson:${jerseyJakartaversion}")
+				genexusConfiguration ("org.glassfish.jersey.containers:jersey-container-servlet-core:${jerseyJakartaversion}")
+				genexusConfiguration ("org.glassfish.jersey.inject:jersey-hk2:${jerseyJakartaversion}")
+			}
+		}
+
+		jakartaJaxbGXTest 'com.sun.xml.bind:jaxb-impl:2.3.5'
+		jakartaJaxws 'com.sun.xml.ws:jaxws-tools:3.0.0'
+	}
+
+	if (javaPlatform == "javaEE" || javaPlatform == "both") {
+		genexusConfiguration ("com.genexus:gxwrapperjavax:${genexusVersion}") {
+			exclude group: 'com.genexus', module: 'gxwrappercommon'
+			exclude group: 'com.sun.mail', module: 'jakarta.mail'
+			exclude group: 'joda-time', module: 'joda-time'
+			if (project.hasProperty('deploy') && project.hasProperty('RestSupport') && !RestSupport.equalsIgnoreCase("true") ) {
+				exclude group: 'javax.ws.rs', module: 'javax.ws.rs-api'
+				exclude group: 'com.fasterxml.jackson.jaxrs', module: 'jackson-jaxrs-json-provider'
+				exclude group: 'com.fasterxml.jackson.module', module: 'jackson-module-jaxb-annotations'
+				exclude group: 'org.glassfish.jersey.media', module: 'jersey-media-json-jackson'
+				exclude group: 'org.glassfish.jersey.containers', module: 'jersey-container-servlet-core'
+				exclude group: 'org.glassfish.jersey.inject', module: 'jersey-hk2'
+			}
+			if (project.hasProperty('deploy') && project.hasProperty('SoapNativeSupport') && !SoapNativeSupport.equalsIgnoreCase("true") ) {
+				exclude group: 'com.sun.xml.ws', module: 'jaxws-rt'
+			}
+			if (project.hasProperty('deploy')) {
+				exclude group: 'javax.servlet', module: 'javax.servlet-api'
+			}
+		}
+
+		if (!project.hasProperty('deploy') || (project.hasProperty('RestSupport') && RestSupport.equalsIgnoreCase("true") )) {
+			genexusConfiguration group: 'javax.xml.bind', name: 'jaxb-api', version: '2.3.1'
+		}
+
+		if (!project.hasProperty('deploy')) {
+			genexusConfiguration fileTree('services\\JavaEE') {
+				include '*.jar'
+			}
+		}
+
+		javaxJaxws ('com.sun.xml.ws:jaxws-tools:2.3.5') {
+			exclude group: 'com.sun.mail', module: 'jakarta.mail'
+		}
+	}
+}
+
+task copyRuntimeLibs(type: Copy) {
+	duplicatesStrategy = 'include'
+	from configurations.genexusConfiguration
+	from configurations.runtimeClasspath
+	from configurations.driversConfiguration
+	if (javaPlatform == "jakartaEE" || javaPlatform == "both") {
+		from configurations.jakartaJaxws
+		from configurations.jakartaJaxbGXTest
+	}
+	else {
+		from configurations.javaxJaxws
+	}
+	into layout.buildDirectory.dir('libs')
+	
+	eachFile {
+    def targetFile = new File(destinationDir, path)
+    if (file.lastModified() < targetFile.lastModified()) {
+        exclude()
+    }
+	}	
+}
+
+task copyAdditionalFiles(type: Copy) {
+	from('.') {
+		include 'log4j2.xml'
+		include 'REORGPGM.GEN'
+	}
+	from('src\\main\\java') {
+		include '**\\*.cfg'
+		include '**\\client.cfg.dev'
+		include '**\\Images.txt'
+		include '**\\messages*.txt'
+		include '**\\GXApplicationClasses.txt'
+	}
+	into project.sourceSets.main.java.destinationDirectory
+	
+	eachFile {
+    def targetFile = new File(destinationDir, path)
+    if (file.lastModified() < targetFile.lastModified()) {
+        exclude()
+    }
+	}	
+}
+
+if (project.hasProperty('UseCompileSources')) {
+	task copyTempClasses(type: Copy) {
+		dependsOn tasks.compileJava
+		dependsOn tasks.copyAdditionalFiles
+		from ('tempClasses') {
+			include '**/*'
+		}
+		into 'build\\classes\\java\\main'
+		
+		eachFile {
+	    def targetFile = new File(destinationDir, path)
+	    if (file.lastModified() < targetFile.lastModified()) {
+	        exclude()
+	    }
+		}
+	}
+}
+
+tasks.register('copyTomcat') {
+	dependsOn tasks.copyTomcatWebInf
+	
+	project.mkdir project.findProperty('TOMCAT_WEBAPP_PATH') + '\\WEB-INF\\classes\\dummy'
+	
+	def templateFile = new File('context.xml')
+	def appContextFile = new File(project.findProperty('TOMCAT_PATH') + '\\conf\\catalina\\localhost\\' + project.findProperty('WEBAPP_NAME') + '.xml')
+	if (templateFile.lastModified() > appContextFile.lastModified()) {
+	  copy {
+	    from '.'
+	    into project.findProperty('TOMCAT_PATH') + '\\conf\\catalina\\localhost'
+	    include 'context.xml'
+	    rename 'context.xml', project.findProperty('WEBAPP_NAME') + '.xml'
+		}
+	}
+}
+
+task copyTomcatLib(type: Copy) {
+	duplicatesStrategy = 'include'
+	from configurations.genexusConfiguration
+	from configurations.runtimeClasspath
+	from configurations.driversConfiguration
+	into project.findProperty('TOMCAT_WEBAPP_PATH') + '\\WEB-INF\\lib'
+
+	eachFile {
+    def targetFile = new File(destinationDir, path)
+    if (file.lastModified() < targetFile.lastModified()) {
+        exclude()
+    }
+	}	
+}
+
+task copyTomcatResources(type: Copy) {
+	into project.findProperty('TOMCAT_WEBAPP_PATH')
+	
+	from ('.') {
+		include 'gxmetadata/**/*'
+		include 'Metadata/TableAccess/**/*'
+		include 'themes/**/*'
+		include project.findProperty('LAYOUT_METADATA_FOLDER') + '/*.rpt'
+		include 'rbuildj.dll' 
+		include 'GXDIB32.DLL' 
+		include 'printingappletsigned.jar' 
+	}
+	
+	from ('GAM_Backend') {
+		duplicatesStrategy = 'include'
+		include '**/*'
+	}
+	
+	from ('.') {
+		into 'META-INF'
+		include 'context.xml'
+	}
+	
+	eachFile {
+    def targetFile = new File(destinationDir, path)
+    if (file.lastModified() < targetFile.lastModified()) {
+        exclude()
+    }
+	}
+}
+
+task copyTomcatPackageResources(type: Copy) {
+	from ('.') {
+		include '*.services'
+		include '*.rewrite'
+	}
+	from ('GAM_Backend/WEB-INF/classes/genexus/security/backend') {
+		include 'GAMImages.txt'
+	}
+	into project.findProperty('TOMCAT_WEBAPP_PATH') + '\\WEB-INF\\classes\\' + project.findProperty('JAVA_PACKAGE_NAME_FOLDER')
+	
+	eachFile {
+    def targetFile = new File(destinationDir, path)
+    if (file.lastModified() < targetFile.lastModified()) {
+        exclude()
+    }
+	}
+}
+
+task copyTomcatStatic(type: Copy) {
+	from ('.') {
+		include 'bootstrap/**/*'
+		include 'static/**/*'
+		include 'devmenu/**/*'
+		include '*Resources/**/*'
+		include 'UserControls/**/*'
+		include 'Help/**/*.htm'
+		include	'*manifest.json'
+		include '*service-worker.js'
+		include '*.yaml'
+		include 'developermenu.html'
+		include 'DeveloperMenu.xml'
+		include 'prgs.xsl'
+	}
+	from ('../../CSSLibraries') {
+		include '**/*'
+	}
+	from ('staticContent') {
+		exclude '**/*.html'
+	}	
+	from ('js') {
+		include '**/*.js'
+		exclude '**/*.src.js'
+	}		
+	from ('UCSupportFiles') {
+		include '**/*.*'
+		exclude '*.VER'
+	}
+	into project.findProperty('TOMCAT_STATIC_PATH')
+	
+	eachFile {
+    def targetFile = new File(destinationDir, path)
+    if (file.lastModified() < targetFile.lastModified()) {
+        exclude()
+    }
+	}	
+}
+
+task copyTomcatClasses(type: Copy) {
+	dependsOn tasks.copyAdditionalFiles
+	dependsOn tasks.copyTomcatLib
+	dependsOn tasks.copyTomcatStatic
+	dependsOn tasks.copyTomcatResources
+	dependsOn tasks.copyTomcatPackageResources
+	from (compileJava.outputs.files) {
+		exclude '*.bin', 'REORGPGM.GEN', '**/reorg.cfg', '**/reorg.class', '**/reorg__default.class', '**/Reorganization.class'
+	}
+	from ('.') {
+		if (javaPlatform == "jakartaEE" || javaPlatform == "both") {
+			include 'gx_handler_chain_jakarta.xml'
+		}
+		else {
+			include 'gx_handler_chain.xml'
+		}
+	}
+	into project.findProperty('TOMCAT_WEBAPP_PATH') + '\\WEB-INF\\classes'
+	rename 'gx_handler_chain_jakarta.xml', 'gx_handler_chain.xml'
+	
+	eachFile {
+    def targetFile = new File(destinationDir, path)
+    if (file.lastModified() < targetFile.lastModified()) {
+        exclude()
+    }
+	}
+}
+
+task copyTomcatWebInf(type: Copy) {
+	dependsOn tasks.copyTomcatClasses
+	from ('.') {
+		include 'web.xml'
+		include 'CloudServices.config'
+		include 'GXCF_Chatbots.config'
+		include 'sun-jaxws.xml'
+		include 'rewrite.config'
+		include 'PDFReport.template'
+		include 'gxusercontrols/**/*'
+		include 'private/**/*'
+		include 'application.gam'
+		include 'connection.gam'
+	}
+	into project.findProperty('TOMCAT_WEBAPP_PATH') + '\\WEB-INF'
+	
+	eachFile {
+    def targetFile = new File(destinationDir, path)
+    if (file.lastModified() < targetFile.lastModified()) {
+        exclude()
+    }
+	}	
+}
+
+task cleanTomcat(type: Delete) {
+	if (project.hasProperty('TOMCAT_WEBAPP_PATH'))	{	
+		delete project.findProperty('TOMCAT_WEBAPP_PATH')
+	}
+}
+
+task cleanSources(type: Delete) {
+	delete 'src\\main\\java'
+}
+
+task getDeps(type: Copy) {
+	duplicatesStrategy = 'include'
+	from configurations.genexusConfiguration
+	from configurations.runtimeClasspath
+	from configurations.driversConfiguration
+	into 'dependencies/'
+}
+
+task getReorgDeps(type: Copy) {
+	from configurations.reorgConfiguration
+	from configurations.driversConfiguration
+	if (project.hasProperty('GAM_MODEL_PATH')) {
+		into project.findProperty('GAM_MODEL_PATH') + '/lib/'
+	}
+	else {
+		into 'dependencies/'
+	}
+}
+
+task cleanDeps(type: Delete) {
+	if (project.hasProperty('GAM_MODEL_PATH')) {
+		delete project.findProperty('GAM_MODEL_PATH') + '/lib/'
+	}
+	else {
+		delete 'dependencies'
+	}
+}
+
+tasks.register('buildGenexus') {
+	dependsOn copyRuntimeLibs
+	dependsOn tasks.copyAdditionalFiles
+	if (project.hasProperty('UseCompileSources')) {	
+		dependsOn tasks.copyTempClasses
+	}
+	
+	doLast {
+		if (project.hasProperty('TOMCAT_WEBAPP_PATH'))	{
+			def className = ''
+			FileTree tree = fileTree('build\\classes\\java\\main').include('**/*_services.class')
+			tree.visit {element ->
+				className = "$element.relativePath"
+				if (className.endsWith('.class')) {
+					className = className.replaceAll('.class', '').replaceAll('/', '.')
+					exec {
+						workingDir '.\\build\\classes\\java\\main'
+						commandLine project.findProperty('org.gradle.java.home') + '\\bin\\java', '-classpath', '.;..\\..\\..\\libs\\*', 'com.sun.tools.ws.WsGen', className
+					}
+				}
+			}
+		}
+	}
+}
+
+build.finalizedBy compileJava
+build.finalizedBy buildGenexus
+if (project.hasProperty('TOMCAT_WEBAPP_PATH')) {
+	buildGenexus.finalizedBy copyTomcat
+}
+clean.finalizedBy cleanTomcat
+clean.finalizedBy cleanSources

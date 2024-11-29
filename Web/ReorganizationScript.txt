@@ -1,0 +1,2 @@
+CREATE TABLE Chamado (ChamadoId smallint NOT NULL , ChamadoDescricao VARCHAR(250) NOT NULL , ChamadoCriacaoDate timestamp without time zone NOT NULL , ChamadoResolucaoDate timestamp without time zone NOT NULL , PRIMARY KEY(ChamadoId));
+
